@@ -127,3 +127,16 @@ def home():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
+    @app.route("/analyze", methods=["POST"])
+def analyze():
+    data = request.json
+    text = data.get("text", "")
+
+    if not text:
+        return jsonify({"error": "No input provided"}), 400
+
+    summary = ai_summary(text)
+
+    return jsonify({
+        "summary": summary
+    })
