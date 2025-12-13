@@ -1,9 +1,11 @@
+from flask_cors import CORS
 from flask import Flask, request, jsonify
 import PyPDF2
 import requests
 import os
 
 app = Flask(__name__)
+CORS(app)
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
