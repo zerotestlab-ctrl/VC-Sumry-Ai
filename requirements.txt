@@ -1,6 +1,3 @@
 flask
-PyPDF2
-requests
-groq
-gunicorn
 flask-cors
+requests
