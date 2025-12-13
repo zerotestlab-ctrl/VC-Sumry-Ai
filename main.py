@@ -124,10 +124,7 @@ def analyze():
 def home():
     return "VC AI Backend Running!"
 
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
-    @app.route("/analyze", methods=["POST"])
+@app.route("/analyze", methods=["POST"])
 def analyze():
     data = request.json
     text = data.get("text", "")
@@ -140,3 +137,5 @@ def analyze():
     return jsonify({
         "summary": summary
     })
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000)
