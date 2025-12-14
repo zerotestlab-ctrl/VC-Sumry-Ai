@@ -13,16 +13,15 @@ def home():
     return "VC AI Backend Running!"
 
 # -------------------------
-# INVESTMENT MEMO GENERATOR
+# VC MEMO + FOUNDER SIGNALS
 # -------------------------
-def generate_investment_memo(text):
+def generate_vc_analysis(startup_text, founder_info):
     if not GROQ_API_KEY:
         return "GROQ_API_KEY is missing in environment variables."
 
     url = "https://api.groq.com/openai/v1/chat/completions"
 
     payload = {
-        # ✅ Use stable model for MVP
         "model": "llama-3.1-8b-instant",
         "messages": [
             {
@@ -32,22 +31,32 @@ def generate_investment_memo(text):
             {
                 "role": "user",
                 "content": f"""
-Write an internal VC investment memo based ONLY on the startup description below.
+You are writing an internal VC investment memo.
 
-Sections required:
+Startup Description:
+{startup_text}
+
+Founder / Team Signals (provided, may be incomplete):
+{founder_info}
+
+Instructions:
+- Infer founder/team qualifications ONLY from provided signals
+- Do NOT claim verification
+- Clearly state uncertainty when data is missing
+- Think like a cautious VC
+
+Produce these sections:
+
 1. Company Overview
 2. Problem
 3. Solution
-4. Target Market & Size
+4. Market & Opportunity
 5. Business Model
-6. Traction / Signals
+6. Founder & Team Signals
 7. Strengths
 8. Risks
 9. Red Flags
 10. Overall Verdict (Invest / Pass / Needs More Data)
-
-Startup description:
-{text}
 """
             }
         ]
@@ -75,17 +84,27 @@ Startup description:
 def analyze():
     data = request.get_json()
 
-    if not data or "text" not in data:
-        return jsonify({"error": "No input provided"}), 400
+    if not data or "startup_text" not in data:
+        return jsonify({"error": "No startup description provided"}), 400
 
-    text = data["text"].strip()
+    startup_text = data["startup_text"].strip()
 
-    if not text:
-        return jsonify({"error": "Empty description"}), 400
+    if not startup_text:
+        return jsonify({"error": "Empty startup description"}), 400
 
-    memo = generate_investment_memo(text)
+    founder_info = f"""
+Founder Name: {data.get("founder_name", "Not provided")}
+LinkedIn: {data.get("linkedin", "Not provided")}
+GitHub: {data.get("github", "Not provided")}
+Twitter/X: {data.get("twitter", "Not provided")}
+Team Background: {data.get("team_background", "Not provided")}
+"""
 
-    return jsonify({"summary": memo})
+    memo = generate_vc_analysis(startup_text, founder_info)
+
+    return jsonify({
+        "memo": memo
+    })
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
