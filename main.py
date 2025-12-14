@@ -23,7 +23,7 @@ def generate_investment_memo(text):
 
     payload = {
         # ✅ Use stable model for MVP
-        "model": "llama3-8b-8192",
+        "model": "llama-3.1-8b-instant",
         "messages": [
             {
                 "role": "system",
