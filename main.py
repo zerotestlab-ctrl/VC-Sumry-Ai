@@ -16,10 +16,14 @@ def home():
 # INVESTMENT MEMO GENERATOR
 # -------------------------
 def generate_investment_memo(text):
+    if not GROQ_API_KEY:
+        return "GROQ_API_KEY is missing in environment variables."
+
     url = "https://api.groq.com/openai/v1/chat/completions"
 
     payload = {
-        "model": "llama3-70b-8192",
+        # ✅ Use stable model for MVP
+        "model": "llama3-8b-8192",
         "messages": [
             {
                 "role": "system",
@@ -28,16 +32,15 @@ def generate_investment_memo(text):
             {
                 "role": "user",
                 "content": f"""
-You are writing an internal VC investment memo.
+Write an internal VC investment memo based ONLY on the startup description below.
 
-Based ONLY on the startup description below, generate a clear, structured investment memo with the following sections:
-
+Sections required:
 1. Company Overview
 2. Problem
 3. Solution
-4. Target Market & Size (estimate if needed)
+4. Target Market & Size
 5. Business Model
-6. Traction / Signals (infer if early)
+6. Traction / Signals
 7. Strengths
 8. Risks
 9. Red Flags
@@ -55,10 +58,13 @@ Startup description:
         "Content-Type": "application/json"
     }
 
-    response = requests.post(url, json=payload, headers=headers)
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=30)
+    except Exception as e:
+        return f"Request error: {str(e)}"
 
     if response.status_code != 200:
-        return "Failed to generate memo. Please try again."
+        return f"Groq API error {response.status_code}: {response.text}"
 
     return response.json()["choices"][0]["message"]["content"]
 
@@ -79,9 +85,7 @@ def analyze():
 
     memo = generate_investment_memo(text)
 
-    return jsonify({
-        "summary": memo
-    })
+    return jsonify({"summary": memo})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
