@@ -18,49 +18,46 @@ def home():
 # -------------------------
 def generate_vc_analysis(startup_text, founder_info):
     if not GROQ_API_KEY:
-        return {"error": "GROQ_API_KEY is missing in environment variables."}
+        return {"error": "GROQ_API_KEY missing"}
 
     url = "https://api.groq.com/openai/v1/chat/completions"
 
     payload = {
         "model": "llama-3.1-8b-instant",
+        "temperature": 0.2,
         "messages": [
             {
                 "role": "system",
-                "content": "You are a top-tier venture capital investment analyst."
+                "content": "You are a cautious, professional VC analyst."
             },
             {
                 "role": "user",
                 "content": f"""
-You must respond ONLY in valid JSON.
-Do NOT include markdown.
-Do NOT include commentary outside JSON.
+Return ONLY valid JSON. No markdown. No explanations.
 
-Return this exact JSON structure:
-
+JSON format:
 {{
-  "company_overview": "",
-  "problem": "",
-  "solution": "",
-  "market_opportunity": "",
-  "business_model": "",
-  "founder_team_signals": "",
-  "strengths": "",
-  "risks": "",
-  "red_flags": "",
-  "verdict": ""
+  "company_overview": "...",
+  "problem": "...",
+  "solution": "...",
+  "market": "...",
+  "business_model": "...",
+  "founder_team_signals": "...",
+  "strengths": "...",
+  "risks": "...",
+  "red_flags": "...",
+  "verdict": "Invest / Pass / Needs More Data"
 }}
 
 Rules:
-- Write clearly and professionally
-- Infer cautiously
-- State uncertainty where appropriate
-- Think like a real VC
+- Be concise
+- No speculation
+- State uncertainty clearly
 
-Startup Description:
+Startup description:
 {startup_text}
 
-Founder / Team Signals:
+Founder / Team signals:
 {founder_info}
 """
             }
@@ -73,24 +70,31 @@ Founder / Team Signals:
     }
 
     try:
-        response = requests.post(url, json=payload, headers=headers, timeout=30)
+        response = requests.post(
+            url,
+            json=payload,
+            headers=headers,
+            timeout=15
+        )
+    except requests.exceptions.Timeout:
+        return {"error": "Analysis timed out. Try a shorter description."}
     except Exception as e:
-        return {"error": f"Request error: {str(e)}"}
+        return {"error": str(e)}
 
     if response.status_code != 200:
         return {
-            "error": f"Groq API error {response.status_code}",
+            "error": "Groq API failure",
             "details": response.text
         }
 
-    raw_output = response.json()["choices"][0]["message"]["content"]
+    raw = response.json()["choices"][0]["message"]["content"]
 
     try:
-        return json.loads(raw_output)
+        return json.loads(raw)
     except:
         return {
-            "error": "AI returned invalid JSON",
-            "raw_output": raw_output
+            "error": "Invalid AI response",
+            "raw_output": raw
         }
 
 # -------------------------
@@ -101,12 +105,11 @@ def analyze():
     data = request.get_json()
 
     if not data or "startup_text" not in data:
-        return jsonify({"error": "No startup description provided"}), 400
+        return jsonify({"error": "Startup description required"}), 400
 
     startup_text = data["startup_text"].strip()
-
     if not startup_text:
-        return jsonify({"error": "Empty startup description"}), 400
+        return jsonify({"error": "Empty description"}), 400
 
     founder_info = f"""
 Founder Name: {data.get("founder_name", "Not provided")}
@@ -117,7 +120,6 @@ Team Background: {data.get("team_background", "Not provided")}
 """
 
     result = generate_vc_analysis(startup_text, founder_info)
-
     return jsonify(result)
 
 if __name__ == "__main__":
