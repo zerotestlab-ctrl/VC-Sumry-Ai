@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
 import os
+import json
 
 app = Flask(__name__)
 CORS(app)
@@ -17,7 +18,7 @@ def home():
 # -------------------------
 def generate_vc_analysis(startup_text, founder_info):
     if not GROQ_API_KEY:
-        return "GROQ_API_KEY is missing in environment variables."
+        return {"error": "GROQ_API_KEY is missing in environment variables."}
 
     url = "https://api.groq.com/openai/v1/chat/completions"
 
@@ -31,32 +32,36 @@ def generate_vc_analysis(startup_text, founder_info):
             {
                 "role": "user",
                 "content": f"""
-You are writing an internal VC investment memo.
+You must respond ONLY in valid JSON.
+Do NOT include markdown.
+Do NOT include commentary outside JSON.
+
+Return this exact JSON structure:
+
+{{
+  "company_overview": "",
+  "problem": "",
+  "solution": "",
+  "market_opportunity": "",
+  "business_model": "",
+  "founder_team_signals": "",
+  "strengths": "",
+  "risks": "",
+  "red_flags": "",
+  "verdict": ""
+}}
+
+Rules:
+- Write clearly and professionally
+- Infer cautiously
+- State uncertainty where appropriate
+- Think like a real VC
 
 Startup Description:
 {startup_text}
 
-Founder / Team Signals (provided, may be incomplete):
+Founder / Team Signals:
 {founder_info}
-
-Instructions:
-- Infer founder/team qualifications ONLY from provided signals
-- Do NOT claim verification
-- Clearly state uncertainty when data is missing
-- Think like a cautious VC
-
-Produce these sections:
-
-1. Company Overview
-2. Problem
-3. Solution
-4. Market & Opportunity
-5. Business Model
-6. Founder & Team Signals
-7. Strengths
-8. Risks
-9. Red Flags
-10. Overall Verdict (Invest / Pass / Needs More Data)
 """
             }
         ]
@@ -70,12 +75,23 @@ Produce these sections:
     try:
         response = requests.post(url, json=payload, headers=headers, timeout=30)
     except Exception as e:
-        return f"Request error: {str(e)}"
+        return {"error": f"Request error: {str(e)}"}
 
     if response.status_code != 200:
-        return f"Groq API error {response.status_code}: {response.text}"
+        return {
+            "error": f"Groq API error {response.status_code}",
+            "details": response.text
+        }
 
-    return response.json()["choices"][0]["message"]["content"]
+    raw_output = response.json()["choices"][0]["message"]["content"]
+
+    try:
+        return json.loads(raw_output)
+    except:
+        return {
+            "error": "AI returned invalid JSON",
+            "raw_output": raw_output
+        }
 
 # -------------------------
 # API ENDPOINT
@@ -100,11 +116,9 @@ Twitter/X: {data.get("twitter", "Not provided")}
 Team Background: {data.get("team_background", "Not provided")}
 """
 
-    memo = generate_vc_analysis(startup_text, founder_info)
+    result = generate_vc_analysis(startup_text, founder_info)
 
-    return jsonify({
-        "memo": memo
-    })
+    return jsonify(result)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
