@@ -32,8 +32,9 @@ def check_usage(ip):
     return True
 
 # -------------------------
-# TEMP FEEDBACK STORAGE (MVP)
+# TEMP STORAGE (MVP ONLY)
 # -------------------------
+waitlist_store = []
 feedback_store = []
 founder_feedback_store = []
 
@@ -132,7 +133,25 @@ GitHub: {data.get("github", "Not provided")}
     return jsonify(result)
 
 # -------------------------
-# VC FEEDBACK (POST-ANALYSIS)
+# WAITLIST ENDPOINT (FIX)
+# -------------------------
+@app.route("/waitlist", methods=["POST"])
+def waitlist():
+    data = request.get_json()
+    email = data.get("email", "").strip().lower()
+
+    if not email:
+        return jsonify({"error": "Email required"}), 400
+
+    waitlist_store.append({
+        "email": email,
+        "timestamp": time.time()
+    })
+
+    return jsonify({"status": "Waitlist signup successful"})
+
+# -------------------------
+# VC FEEDBACK
 # -------------------------
 @app.route("/feedback", methods=["POST"])
 def feedback():
@@ -145,7 +164,7 @@ def feedback():
     return jsonify({"status": "Feedback received"})
 
 # -------------------------
-# FOUNDER IMPROVEMENT FEEDBACK
+# FOUNDER FEEDBACK
 # -------------------------
 @app.route("/founder-feedback", methods=["POST"])
 def founder_feedback():
