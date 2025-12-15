@@ -39,7 +39,7 @@ def home():
     return "VC AI Backend Running!"
 
 # -------------------------
-# VC MEMO + FOUNDER SIGNALS
+# VC ANALYSIS
 # -------------------------
 def generate_vc_analysis(startup_text, founder_info):
     if not GROQ_API_KEY:
@@ -69,18 +69,38 @@ Return EXACT structure:
   "solution": "",
   "market": "",
   "business_model": "",
+
   "founder_team_signals": "",
+  "founder_signal_breakdown": {{
+    "experience_signal": "High / Medium / Low / Unclear",
+    "technical_signal": "High / Medium / Low / Unclear",
+    "execution_signal": "High / Medium / Low / Unclear",
+    "credibility_signal": "Strong / Moderate / Weak / Unclear",
+    "confidence_level": "High / Medium / Low"
+  }},
+
+  "deal_score": {{
+    "overall_score": 0,
+    "market_score": 0,
+    "team_score": 0,
+    "execution_score": 0,
+    "risk_score": 0,
+    "confidence": "High / Medium / Low"
+  }},
+
   "strengths": "",
   "risks": "",
   "red_flags": "",
-  "verdict": "Invest / Pass / Needs More Data"
+  "verdict": "Invest / Pass / Needs More Data",
+
+  "analysis_disclaimer": "This analysis is based on limited, self-reported information and inferred signals. It is not a verification, background check, or investment recommendation."
 }}
 
 Rules:
-- Be concise and realistic
-- State uncertainty clearly
+- Be conservative with scores
+- Use 'Unclear' when data is missing
 - Do not invent facts
-- Think like a real VC
+- Think like a real VC partner
 
 Startup description:
 {startup_text}
@@ -98,12 +118,7 @@ Founder / Team signals:
     }
 
     try:
-        response = requests.post(
-            url,
-            json=payload,
-            headers=headers,
-            timeout=20
-        )
+        response = requests.post(url, json=payload, headers=headers, timeout=20)
     except requests.exceptions.Timeout:
         return {"error": "Analysis timed out. Try a shorter description."}
     except Exception as e:
@@ -144,9 +159,8 @@ def analyze():
         return jsonify({"error": "Startup description required"}), 400
 
     startup_text = data["startup_text"].strip()
-
     if not startup_text:
-        return jsonify({"error": "Empty startup description"}), 400
+        return jsonify({"error": "Empty description"}), 400
 
     founder_info = f"""
 Founder Name: {data.get("founder_name", "Not provided")}
