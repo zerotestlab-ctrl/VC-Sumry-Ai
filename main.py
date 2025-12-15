@@ -3,12 +3,37 @@ from flask_cors import CORS
 import requests
 import os
 import json
+import time
 
 app = Flask(__name__)
 CORS(app)
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
+# -------------------------
+# SIMPLE USAGE LIMIT (IP-BASED)
+# -------------------------
+USAGE_LIMIT = 3  # per day
+usage_store = {}
+
+def check_usage(ip):
+    now = time.time()
+
+    if ip not in usage_store:
+        usage_store[ip] = {"count": 0, "reset": now + 86400}
+
+    if now > usage_store[ip]["reset"]:
+        usage_store[ip] = {"count": 0, "reset": now + 86400}
+
+    if usage_store[ip]["count"] >= USAGE_LIMIT:
+        return False
+
+    usage_store[ip]["count"] += 1
+    return True
+
+# -------------------------
+# HEALTH CHECK
+# -------------------------
 @app.route("/")
 def home():
     return "VC AI Backend Running!"
@@ -18,7 +43,7 @@ def home():
 # -------------------------
 def generate_vc_analysis(startup_text, founder_info):
     if not GROQ_API_KEY:
-        return {"error": "GROQ_API_KEY missing"}
+        return {"error": "Missing API configuration"}
 
     url = "https://api.groq.com/openai/v1/chat/completions"
 
@@ -28,31 +53,34 @@ def generate_vc_analysis(startup_text, founder_info):
         "messages": [
             {
                 "role": "system",
-                "content": "You are a cautious, professional VC analyst."
+                "content": "You are a cautious, professional venture capital analyst."
             },
             {
                 "role": "user",
                 "content": f"""
-Return ONLY valid JSON. No markdown. No explanations.
+Respond ONLY with valid JSON.
+No markdown. No explanations. No extra text.
 
-JSON format:
+Return EXACT structure:
+
 {{
-  "company_overview": "...",
-  "problem": "...",
-  "solution": "...",
-  "market": "...",
-  "business_model": "...",
-  "founder_team_signals": "...",
-  "strengths": "...",
-  "risks": "...",
-  "red_flags": "...",
+  "company_overview": "",
+  "problem": "",
+  "solution": "",
+  "market": "",
+  "business_model": "",
+  "founder_team_signals": "",
+  "strengths": "",
+  "risks": "",
+  "red_flags": "",
   "verdict": "Invest / Pass / Needs More Data"
 }}
 
 Rules:
-- Be concise
-- No speculation
+- Be concise and realistic
 - State uncertainty clearly
+- Do not invent facts
+- Think like a real VC
 
 Startup description:
 {startup_text}
@@ -74,42 +102,51 @@ Founder / Team signals:
             url,
             json=payload,
             headers=headers,
-            timeout=15
+            timeout=20
         )
     except requests.exceptions.Timeout:
         return {"error": "Analysis timed out. Try a shorter description."}
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": f"Request failed: {str(e)}"}
 
     if response.status_code != 200:
         return {
-            "error": "Groq API failure",
+            "error": "AI service error",
             "details": response.text
         }
 
-    raw = response.json()["choices"][0]["message"]["content"]
+    raw_output = response.json()["choices"][0]["message"]["content"]
 
     try:
-        return json.loads(raw)
-    except:
+        return json.loads(raw_output)
+    except Exception:
         return {
-            "error": "Invalid AI response",
-            "raw_output": raw
+            "error": "Invalid AI response format",
+            "raw_output": raw_output
         }
 
 # -------------------------
-# API ENDPOINT
+# ANALYZE ENDPOINT
 # -------------------------
 @app.route("/analyze", methods=["POST"])
 def analyze():
+    ip = request.remote_addr
+
+    if not check_usage(ip):
+        return jsonify({
+            "error": "Usage limit reached",
+            "message": "You’ve reached the free daily limit. Join the waitlist for higher access."
+        }), 429
+
     data = request.get_json()
 
     if not data or "startup_text" not in data:
         return jsonify({"error": "Startup description required"}), 400
 
     startup_text = data["startup_text"].strip()
+
     if not startup_text:
-        return jsonify({"error": "Empty description"}), 400
+        return jsonify({"error": "Empty startup description"}), 400
 
     founder_info = f"""
 Founder Name: {data.get("founder_name", "Not provided")}
@@ -122,5 +159,8 @@ Team Background: {data.get("team_background", "Not provided")}
     result = generate_vc_analysis(startup_text, founder_info)
     return jsonify(result)
 
+# -------------------------
+# RUN SERVER
+# -------------------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
