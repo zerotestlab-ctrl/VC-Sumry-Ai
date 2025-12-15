@@ -13,7 +13,7 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 # -------------------------
 # SIMPLE USAGE LIMIT (IP-BASED)
 # -------------------------
-USAGE_LIMIT = 3  # per day
+USAGE_LIMIT = 3
 usage_store = {}
 
 def check_usage(ip):
@@ -32,6 +32,12 @@ def check_usage(ip):
     return True
 
 # -------------------------
+# TEMP FEEDBACK STORAGE (MVP)
+# -------------------------
+feedback_store = []
+founder_feedback_store = []
+
+# -------------------------
 # HEALTH CHECK
 # -------------------------
 @app.route("/")
@@ -42,9 +48,6 @@ def home():
 # VC ANALYSIS
 # -------------------------
 def generate_vc_analysis(startup_text, founder_info):
-    if not GROQ_API_KEY:
-        return {"error": "Missing API configuration"}
-
     url = "https://api.groq.com/openai/v1/chat/completions"
 
     payload = {
@@ -59,7 +62,6 @@ def generate_vc_analysis(startup_text, founder_info):
                 "role": "user",
                 "content": f"""
 Respond ONLY with valid JSON.
-No markdown. No explanations. No extra text.
 
 Return EXACT structure:
 
@@ -69,38 +71,13 @@ Return EXACT structure:
   "solution": "",
   "market": "",
   "business_model": "",
-
   "founder_team_signals": "",
-  "founder_signal_breakdown": {{
-    "experience_signal": "High / Medium / Low / Unclear",
-    "technical_signal": "High / Medium / Low / Unclear",
-    "execution_signal": "High / Medium / Low / Unclear",
-    "credibility_signal": "Strong / Moderate / Weak / Unclear",
-    "confidence_level": "High / Medium / Low"
-  }},
-
-  "deal_score": {{
-    "overall_score": 0,
-    "market_score": 0,
-    "team_score": 0,
-    "execution_score": 0,
-    "risk_score": 0,
-    "confidence": "High / Medium / Low"
-  }},
-
   "strengths": "",
   "risks": "",
   "red_flags": "",
   "verdict": "Invest / Pass / Needs More Data",
-
-  "analysis_disclaimer": "This analysis is based on limited, self-reported information and inferred signals. It is not a verification, background check, or investment recommendation."
+  "analysis_disclaimer": "This is an inferred analysis, not verification."
 }}
-
-Rules:
-- Be conservative with scores
-- Use 'Unclear' when data is missing
-- Do not invent facts
-- Think like a real VC partner
 
 Startup description:
 {startup_text}
@@ -117,28 +94,14 @@ Founder / Team signals:
         "Content-Type": "application/json"
     }
 
-    try:
-        response = requests.post(url, json=payload, headers=headers, timeout=20)
-    except requests.exceptions.Timeout:
-        return {"error": "Analysis timed out. Try a shorter description."}
-    except Exception as e:
-        return {"error": f"Request failed: {str(e)}"}
+    response = requests.post(url, json=payload, headers=headers, timeout=20)
 
-    if response.status_code != 200:
-        return {
-            "error": "AI service error",
-            "details": response.text
-        }
-
-    raw_output = response.json()["choices"][0]["message"]["content"]
+    raw = response.json()["choices"][0]["message"]["content"]
 
     try:
-        return json.loads(raw_output)
-    except Exception:
-        return {
-            "error": "Invalid AI response format",
-            "raw_output": raw_output
-        }
+        return json.loads(raw)
+    except:
+        return {"error": "Invalid AI output", "raw": raw}
 
 # -------------------------
 # ANALYZE ENDPOINT
@@ -150,28 +113,50 @@ def analyze():
     if not check_usage(ip):
         return jsonify({
             "error": "Usage limit reached",
-            "message": "You’ve reached the free daily limit. Join the waitlist for higher access."
+            "message": "Daily limit reached. Join waitlist for extended access."
         }), 429
 
     data = request.get_json()
+    startup_text = data.get("startup_text", "").strip()
 
-    if not data or "startup_text" not in data:
+    if not startup_text:
         return jsonify({"error": "Startup description required"}), 400
 
-    startup_text = data["startup_text"].strip()
-    if not startup_text:
-        return jsonify({"error": "Empty description"}), 400
-
     founder_info = f"""
-Founder Name: {data.get("founder_name", "Not provided")}
+Founder: {data.get("founder_name", "Not provided")}
 LinkedIn: {data.get("linkedin", "Not provided")}
 GitHub: {data.get("github", "Not provided")}
-Twitter/X: {data.get("twitter", "Not provided")}
-Team Background: {data.get("team_background", "Not provided")}
 """
 
     result = generate_vc_analysis(startup_text, founder_info)
     return jsonify(result)
+
+# -------------------------
+# VC FEEDBACK (POST-ANALYSIS)
+# -------------------------
+@app.route("/feedback", methods=["POST"])
+def feedback():
+    data = request.get_json()
+    feedback_store.append({
+        "timestamp": time.time(),
+        "rating": data.get("rating"),
+        "comment": data.get("comment")
+    })
+    return jsonify({"status": "Feedback received"})
+
+# -------------------------
+# FOUNDER IMPROVEMENT FEEDBACK
+# -------------------------
+@app.route("/founder-feedback", methods=["POST"])
+def founder_feedback():
+    data = request.get_json()
+    founder_feedback_store.append({
+        "timestamp": time.time(),
+        "decision": data.get("decision"),
+        "reason": data.get("reason"),
+        "improvements": data.get("improvements")
+    })
+    return jsonify({"status": "Founder feedback sent"})
 
 # -------------------------
 # RUN SERVER
